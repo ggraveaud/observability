@@ -1,0 +1,36 @@
+global:
+  # ResolveTimeout is the time after which an alert is declared resolved
+  # if it has not been updated.
+  resolve_timeout: 5m
+
+  # The smarthost and SMTP sender used for mail notifications.
+  smtp_smarthost: '[SERVER_NAME_TO_REPLACE]:25'
+  smtp_from: 'root@localhost'
+
+route:
+  group_by: ['alertname']
+
+# How long to initially wait to send a notification for a group
+# of alerts. Allows to wait for an inhibiting alert to arrive or collect
+# more initial alerts for the same group. (Usually ~0s to few minutes.)
+  group_wait: 10s
+
+# How long to wait before sending a notification about new alerts that
+# are added to a group of alerts for which an initial notification has
+# already been sent. (Usually ~5m or more.)
+  group_interval: 2m
+
+
+# How long to wait before sending a notification again if it has already
+# been sent successfully for an alert. (Usually 3h or more).
+  repeat_interval: 30m
+
+
+  receiver: 'email'
+
+receivers:
+- name: 'email'
+  email_configs:
+  - to: 'dev@mirane.com'
+    from: 'dev@mirane.com'
+    require_tls: false

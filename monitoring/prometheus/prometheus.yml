@@ -1,0 +1,78 @@
+global:
+  # How frequently to scrape targets by default.
+  scrape_interval: 10s
+
+  # How long until a scrape request times out.
+  #scrape_timeout: 10s
+
+  # How frequently to evaluate rules.
+  evaluation_interval: 30s
+  
+
+rule_files:
+  - '/etc/prometheus/alert.rules'
+
+alerting:
+  alertmanagers:
+  - scheme: http
+    static_configs:
+    - targets:
+      - "alertmanager:9093"
+
+ # Collector's Reference
+scrape_configs:
+
+  # Prometheus (Time Serie Database)
+  - job_name: 'prometheus'
+    scrape_interval: 10s
+    static_configs:
+      - targets: ['localhost:9090']
+
+  # Node Exporter (Official exporter for Prometheus)
+  - job_name: 'node-exporter'
+    static_configs:
+     - targets: ['node-exporter:9100']
+
+  # Cadvisor (Monitoring the Docker Container and System)
+  # Provides the "Container Last Seen" Method!!
+  - job_name: 'cadvisor'
+    static_configs:
+      - targets: ['cadvisor:8080']
+
+  # Consul (Service Discovery for container)
+  - job_name: 'hv3-services'
+    metrics_path: /prometheus
+    consul_sd_configs:
+     - server: 'consul:8500'
+
+    # Cumulative Rules for filtering services HV3 scrapes
+    relabel_configs:
+        # Keep only services
+        - source_labels: [__meta_consul_service_id]
+          regex:  '(.*):service(.*):(.*)'
+          target_label: __meta_consul_service_id
+          replacement: '$1'  
+          action:   'keep'
+        # Drop smtp with port 25 cause it doesn't have prometheus end-point
+        - source_labels: [__address__]
+          regex:  '(.*):25'
+          target_label: __address__
+          replacement: '$1'  
+          action:   'drop'
+        # Drop Front with port 443 cause it doesn't have prometheus end-point
+        - source_labels: [__address__]
+          regex:  '(.*):443'
+          target_label: __address__
+          replacement: '$1'  
+          action:   'drop'
+        # Create a label named address (instance)
+        - source_labels: [__address__]
+          regex:  '(.*):(.*)'
+          target_label: __address__
+          replacement: 'dev-global.mirane.com:${2}'
+        # Create a label named job
+        - source_labels: [job, __meta_consul_service]
+          regex:  '(.*)'
+          target_label: job
+          replacement: '${1}'
+

@@ -1,0 +1,14 @@
+# config file version
+apiVersion: 1
+
+datasources:
+ - name: prometheus
+   type: prometheus
+   # access mode. direct or proxy. Required
+   access: proxy
+   # url
+   url: http://prometheus:9090
+   version: 1
+   isDefault: true
+   #allow users to edit datasources from the UI.
+   editable: true

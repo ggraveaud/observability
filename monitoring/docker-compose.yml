@@ -1,0 +1,121 @@
+version: '3.2'
+services:
+  grafana:
+    image: grafana/grafana:latest
+    container_name: monitoring_grafana
+    ports:
+    - 3000:3000
+    # workaround for migration from 5.0.2 to 6.2.0
+    user: "104"
+    volumes:
+    # Volume to configure automatically prometheus datasource
+    - /tmp/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources
+    # Volumes to import automatically Dashboards Json
+    - /tmp/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards
+    - /tmp/grafana/dashboards:/tmp
+    # Local Volume for grafana metadata
+    - /tmp/grafana/data:/var/lib/grafana
+    environment:
+      - GF_SECURITY_ADMIN_PASSWORD=monitoring
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    depends_on:
+      - prometheus
+    restart: always
+  prometheus:
+    image: "prom/prometheus:latest"
+    container_name: monitoring_prometheus
+    ports:
+    - 9090:9090
+    volumes:
+    - /tmp/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    - /tmp/prometheus/alert.rules:/etc/prometheus/alert.rules
+    - prometheus_data:/prometheus
+    command:
+    - --config.file=/etc/prometheus/prometheus.yml
+    depends_on:
+      - node-exporter
+      - alertmanager
+    restart: always
+  node-exporter:
+    image: prom/node-exporter:latest
+    container_name: monitoring_node-exporter
+    cap_add:
+      - SYS_TIME
+    ports:
+    - 9100:9100
+  cadvisor:
+    image: google/cadvisor:latest
+    container_name: monitoring_cadvisor
+    ports:
+    - 8091:8080
+    volumes:
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+      - /sys/fs/cgroup/:/sys/fs/cgroup:ro 
+    restart: always
+    depends_on:
+      - prometheus
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: monitoring_alertmanager
+    ports:
+      - 9093:9093
+    volumes:
+      - /tmp/alertmanager/:/etc/alertmanager/
+    restart: always
+    command:
+      - '--config.file=/etc/alertmanager/config.yml'
+      - '--storage.path=/alertmanager'
+    restart: always
+
+  # Datacenter runtime that provides service discovery, configuration, and orchestration.
+  consul:
+    image: "consul:latest"
+    container_name: monitoring_consul
+    hostname: consul
+    volumes:
+      - consul_data:/consul/data
+      - consul_config:/consul/config
+    environment:
+       # disable_update_check Disables automatic checking for security bulletins and new version releases.
+       # skip_leave_on_interrupt -  when Consul receives an interrupt signal, Consul will gracefully leave the cluster
+      - "CONSUL_LOCAL_CONFIG={\"disable_update_check\": true, \"skip_leave_on_interrupt\": true}"
+    entrypoint:
+      - consul
+      - agent                # Run Consul as an agent
+      - -server              # When provided, an agent will act as a Consul server
+      - -data-dir=/consul
+      - -bootstrap-expect=1  # This flag provides the number of expected servers in the datacenter
+      - -ui
+      - -client=0.0.0.0      # The address to which Consul will bind client interfaces, including the HTTP and DNS servers.
+    ports:
+      - "33001:8500"        # HTTP port
+      - "33002:8400"        # RPC local port (for CLI)
+      - "33003:53"          # DNS port (UDP)
+
+  # Service registry bridge for Docker with pluggable adapters
+  # (In this case : Consul)
+  registrator:
+    command: -internal consul://consul:8500
+    image: gliderlabs/registrator:latest
+    container_name: monitoring_registrator
+    depends_on:
+        - consul
+        - prometheus
+    links:
+        - consul
+    volumes:
+        - "/var/run/docker.sock:/tmp/docker.sock"  # Allow to communicate with the local Docker daemon
+
+volumes:
+  prometheus_data: {}
+  grafana_data: {}
+  consul_data:
+    driver: local
+  consul_config:
+    driver: local
+
